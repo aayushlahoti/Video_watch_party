@@ -1,0 +1,54 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.code {
+  color: var(--color-accent-light);
+  font-family: 'Courier New', monospace;
+  font-size: 1.0625rem;
+  letter-spacing: 0.08em;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.statusText {
+  font-weight: 500;
+}
+
+.copyBtn {
+  transition: all var(--transition-base);
+}

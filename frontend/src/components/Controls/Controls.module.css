@@ -1,0 +1,48 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem 1.25rem;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.playbackGroup {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.playBtn {
+  flex: 1;
+}
+
+.pauseBtn {
+  flex: 1;
+}
+
+.videoInputGroup {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.videoInputGroup .input {
+  flex: 1;
+}
+
+.viewerBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.875rem 1rem;
+  background: rgba(148,163,184,0.06);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.viewerIcon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}

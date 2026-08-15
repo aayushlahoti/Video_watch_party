@@ -1,0 +1,10 @@
+{
+  "name": "watch-party-root",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n db,backend,frontend -c blue,green,yellow \"docker compose up -d mongo || echo Docker is required for MongoDB; start Docker Desktop and rerun if the database does not appear\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
