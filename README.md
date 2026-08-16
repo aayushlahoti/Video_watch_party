@@ -198,3 +198,5 @@ cd backend
 npm ci
 npm run create-indexes
 ```
+
+<!-- touch: trigger nodemon restart during smoke test run -->

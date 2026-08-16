@@ -114,7 +114,15 @@ const main = async () => {
   await sleep(500);
 
   // Assign moderator to first participant via API (host only)
-  const targetUserId = (await axios.get(`${BASE_URL}/api/rooms/${roomId}`, { headers: { Cookie: hostCookie } })).data.data.room.participants[0].userId;
+  const roomResp = (await axios.get(`${BASE_URL}/api/rooms/${roomId}`, { headers: { Cookie: hostCookie } })).data.data.room;
+  // Pick a participant who is not the host
+  const hostId = String(roomResp.host);
+  const nonHost = roomResp.participants.find((p) => {
+    const uid = String(typeof p.userId === 'string' ? p.userId : p.userId?._id || p.userId);
+    return uid !== hostId;
+  }) || roomResp.participants[roomResp.participants.length - 1] || roomResp.participants[0];
+  const rawParticipantId = nonHost.userId;
+  const targetUserId = typeof rawParticipantId === 'string' ? rawParticipantId : rawParticipantId?._id || rawParticipantId;
   await axios.patch(`${BASE_URL}/api/rooms/${roomId}/role`, { userId: targetUserId, role: 'moderator' }, { headers: { Cookie: hostCookie } });
   console.log('Assigned moderator role');
 
@@ -128,7 +136,15 @@ const main = async () => {
 
   // Remove second participant (if exists)
   if (participants[1]) {
-    const removedUserId = (await axios.get(`${BASE_URL}/api/rooms/${roomId}`, { headers: { Cookie: hostCookie } })).data.data.room.participants[1].userId;
+    const roomResp2 = (await axios.get(`${BASE_URL}/api/rooms/${roomId}`, { headers: { Cookie: hostCookie } })).data.data.room;
+    // remove the next non-host participant (if possible)
+    const hostId2 = String(roomResp2.host);
+    const candidate = roomResp2.participants.find((p) => {
+      const uid = String(typeof p.userId === 'string' ? p.userId : p.userId?._id || p.userId);
+      return uid !== hostId2;
+    }) || roomResp2.participants[1];
+    const rawRemovedId = candidate.userId;
+    const removedUserId = typeof rawRemovedId === 'string' ? rawRemovedId : rawRemovedId?._id || rawRemovedId;
     await axios.delete(`${BASE_URL}/api/rooms/${roomId}/member`, { data: { userId: removedUserId }, headers: { Cookie: hostCookie } });
     console.log('Removed participant 1');
   }
