@@ -1,8 +1,10 @@
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import app from './app.js';
 import { config } from './config/config.js';
 import { connectDatabase, disconnectDatabase } from './database/connection.js';
+import { connectRedis, disconnectRedis, pubClient, subClient } from './database/redis.js';
 import { socketAuthMiddleware } from './sockets/socketAuthMiddleware.js';
 import registerSocketHandlers from './sockets/socketHandlers.js';
 
@@ -33,11 +35,15 @@ io.on('connection', (socket) => {
   registerSocketHandlers(socket, io);
 });
 
-// Connect to Database and start server
+// Connect to all datastores and start the HTTP server
 const startServer = async () => {
-  // Connect to database (In development without Atlas, make sure you configure .env properly)
   if (config.env !== 'test') {
     await connectDatabase();
+    await connectRedis();
+
+    // Attach the Redis adapter AFTER clients are connected.
+    // This fans out Socket.IO events to all backend instances via Redis Pub/Sub.
+    io.adapter(createAdapter(pubClient, subClient));
   }
 
   server.listen(PORT, () => {
@@ -56,6 +62,7 @@ const shutdown = async (signal) => {
   server.close(async () => {
     console.log('HTTP Server closed.');
     await disconnectDatabase();
+    await disconnectRedis();
     process.exit(0);
   });
 

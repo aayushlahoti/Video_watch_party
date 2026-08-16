@@ -18,6 +18,7 @@ export const config = {
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
   },
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   cookie: {
     secret: process.env.COOKIE_SECRET || '',
   },

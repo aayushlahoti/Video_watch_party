@@ -4,8 +4,11 @@ import {
   updateRoomState,
   addSocketParticipant,
   removeSocketFromAllRooms,
+  removeSocketFromRoom,
   getSocketParticipant,
   getParticipantsList,
+  updateParticipantRole,
+  removeUserSockets,
 } from '../services/roomStateService.js';
 import { resolveUserRole } from './socketAuthMiddleware.js';
 import Room from '../models/Room.js';
@@ -43,20 +46,20 @@ const registerSocketHandlers = (socket, io) => {
 
       await socket.join(roomId);
 
-      addSocketParticipant(roomId, socket.id, {
+      await addSocketParticipant(roomId, socket.id, {
         userId: user.id,
         username: user.username,
         role,
       });
 
-      const state = getOrCreateRoomState(roomId);
+      const state = await getOrCreateRoomState(roomId);
 
       // Notify everyone else in the room
       socket.to(roomId).emit('user-joined', {
         userId: user.id,
         username: user.username,
         role,
-        participants: getParticipantsList(roomId),
+        participants: await getParticipantsList(roomId),
       });
 
       // Send current state only to the joining socket
@@ -65,7 +68,7 @@ const registerSocketHandlers = (socket, io) => {
         videoId: state.videoId,
         currentTime: state.currentTime,
         isPlaying: state.isPlaying,
-        participants: getParticipantsList(roomId),
+        participants: await getParticipantsList(roomId),
       });
     } catch (err) {
       console.error('join-room error:', err);
@@ -91,12 +94,12 @@ const registerSocketHandlers = (socket, io) => {
     try {
       if (!roomId) return socket.emit('error', { message: 'roomId is required' });
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || !isPrivileged(participant.role)) {
         return socket.emit('error', { message: 'Permission denied: only host/moderator can play.' });
       }
 
-      updateRoomState(roomId, { isPlaying: true, currentTime: currentTime ?? 0 });
+      await updateRoomState(roomId, { isPlaying: true, currentTime: currentTime ?? 0 });
 
       socket.to(roomId).emit('video-play', {
         userId: user.id,
@@ -118,12 +121,12 @@ const registerSocketHandlers = (socket, io) => {
     try {
       if (!roomId) return socket.emit('error', { message: 'roomId is required' });
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || !isPrivileged(participant.role)) {
         return socket.emit('error', { message: 'Permission denied: only host/moderator can pause.' });
       }
 
-      updateRoomState(roomId, { isPlaying: false, currentTime: currentTime ?? 0 });
+      await updateRoomState(roomId, { isPlaying: false, currentTime: currentTime ?? 0 });
 
       socket.to(roomId).emit('video-pause', {
         userId: user.id,
@@ -145,12 +148,12 @@ const registerSocketHandlers = (socket, io) => {
     try {
       if (!roomId) return socket.emit('error', { message: 'roomId is required' });
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || !isPrivileged(participant.role)) {
         return socket.emit('error', { message: 'Permission denied: only host/moderator can seek.' });
       }
 
-      updateRoomState(roomId, { currentTime: currentTime ?? 0 });
+      await updateRoomState(roomId, { currentTime: currentTime ?? 0 });
 
       socket.to(roomId).emit('video-seek', {
         userId: user.id,
@@ -174,12 +177,12 @@ const registerSocketHandlers = (socket, io) => {
         return socket.emit('error', { message: 'roomId and videoId are required' });
       }
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || !isPrivileged(participant.role)) {
         return socket.emit('error', { message: 'Permission denied: only host/moderator can change video.' });
       }
 
-      updateRoomState(roomId, { videoId, currentTime: 0, isPlaying: false });
+      await updateRoomState(roomId, { videoId, currentTime: 0, isPlaying: false });
 
       io.to(roomId).emit('video-change', {
         userId: user.id,
@@ -203,7 +206,7 @@ const registerSocketHandlers = (socket, io) => {
         return socket.emit('error', { message: 'roomId, targetUserId, and role are required.' });
       }
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || participant.role !== 'host') {
         return socket.emit('error', { message: 'Permission denied: only host can assign roles.' });
       }
@@ -218,20 +221,13 @@ const registerSocketHandlers = (socket, io) => {
       target.role = role;
       await room.save();
 
-      // Update in-memory state for any active sockets of that user
-      const state = getRoomState(roomId);
-      if (state) {
-        for (const [, info] of state.socketParticipants.entries()) {
-          if (info.userId === targetUserId) {
-            info.role = role;
-          }
-        }
-      }
+      // Update Redis participant entries for all active sockets of that user
+      await updateParticipantRole(roomId, targetUserId, role);
 
       io.to(roomId).emit('role-updated', {
         targetUserId,
         role,
-        participants: getParticipantsList(roomId),
+        participants: await getParticipantsList(roomId),
       });
     } catch (err) {
       console.error('assign-role error:', err);
@@ -249,7 +245,7 @@ const registerSocketHandlers = (socket, io) => {
         return socket.emit('error', { message: 'roomId and targetUserId are required.' });
       }
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || participant.role !== 'host') {
         return socket.emit('error', { message: 'Permission denied: only host can transfer host.' });
       }
@@ -271,19 +267,14 @@ const registerSocketHandlers = (socket, io) => {
       room.host = targetUserId;
       await room.save();
 
-      // Update in-memory roles
-      const state = getRoomState(roomId);
-      if (state) {
-        for (const [, info] of state.socketParticipants.entries()) {
-          if (info.userId === user.id) info.role = 'participant';
-          if (info.userId === targetUserId) info.role = 'host';
-        }
-      }
+      // Update Redis participant entries for both users
+      await updateParticipantRole(roomId, user.id, 'participant');
+      await updateParticipantRole(roomId, targetUserId, 'host');
 
       io.to(roomId).emit('host-transferred', {
         newHostId: targetUserId,
         previousHostId: user.id,
-        participants: getParticipantsList(roomId),
+        participants: await getParticipantsList(roomId),
       });
     } catch (err) {
       console.error('transfer-host error:', err);
@@ -301,7 +292,7 @@ const registerSocketHandlers = (socket, io) => {
         return socket.emit('error', { message: 'roomId and targetUserId are required.' });
       }
 
-      const participant = getSocketParticipant(roomId, socket.id);
+      const participant = await getSocketParticipant(roomId, socket.id);
       if (!participant || !isPrivileged(participant.role)) {
         return socket.emit('error', { message: 'Permission denied: only host/moderator can remove users.' });
       }
@@ -319,24 +310,21 @@ const registerSocketHandlers = (socket, io) => {
       );
       await room.save();
 
-      // Disconnect any sockets of the removed user
-      const state = getRoomState(roomId);
-      if (state) {
-        for (const [sid, info] of state.socketParticipants.entries()) {
-          if (info.userId === targetUserId) {
-            const targetSocket = io.sockets.sockets.get(sid);
-            if (targetSocket) {
-              targetSocket.emit('participant-removed', { reason: 'You have been removed from the room.' });
-              targetSocket.leave(roomId);
-            }
-            state.socketParticipants.delete(sid);
-          }
-        }
+      // Remove participant entries from Redis and collect their socketIds
+      const removedSocketIds = await removeUserSockets(roomId, targetUserId);
+
+      // Notify and eject each removed socket.
+      // Using io.to(sid) routes through the Redis adapter so this works
+      // even if the target socket is connected to a different backend instance.
+      for (const sid of removedSocketIds) {
+        io.to(sid).emit('participant-removed', { reason: 'You have been removed from the room.' });
+        // Ask all nodes to make that socket leave the Socket.IO room
+        await io.in(sid).socketsLeave(roomId);
       }
 
       io.to(roomId).emit('participant-removed', {
         removedUserId: targetUserId,
-        participants: getParticipantsList(roomId),
+        participants: await getParticipantsList(roomId),
       });
     } catch (err) {
       console.error('remove-user error:', err);
@@ -347,36 +335,33 @@ const registerSocketHandlers = (socket, io) => {
   /**
    * Handle disconnect — same as leave-room for all joined rooms.
    */
-  socket.on('disconnect', () => {
-    const rooms = removeSocketFromAllRooms(socket.id);
-    rooms.forEach((roomId) => {
-      io.to(roomId).emit('user-left', {
-        userId: user.id,
-        username: user.username,
-        participants: getParticipantsList(roomId),
-      });
-    });
+  socket.on('disconnect', async () => {
+    try {
+      const rooms = await removeSocketFromAllRooms(socket.id);
+      for (const roomId of rooms) {
+        io.to(roomId).emit('user-left', {
+          userId: user.id,
+          username: user.username,
+          participants: await getParticipantsList(roomId),
+        });
+      }
+    } catch (err) {
+      console.error('disconnect cleanup error:', err);
+    }
   });
 };
 
 /**
  * Helper: handle a user leaving a specific room.
  */
-const handleLeave = (socket, io, roomId, user) => {
+const handleLeave = async (socket, io, roomId, user) => {
   socket.leave(roomId);
-
-  const state = getRoomState(roomId);
-  if (state) {
-    state.socketParticipants.delete(socket.id);
-    if (state.socketParticipants.size === 0) {
-      // State already cleaned by roomStateService or we clean it here
-    }
-  }
+  await removeSocketFromRoom(roomId, socket.id);
 
   io.to(roomId).emit('user-left', {
     userId: user.id,
     username: user.username,
-    participants: getParticipantsList(roomId),
+    participants: await getParticipantsList(roomId),
   });
 };
 
