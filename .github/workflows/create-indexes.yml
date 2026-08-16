@@ -1,0 +1,29 @@
+name: Run Create Indexes
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm running index creation against the configured MONGODB_URI secret'
+        required: true
+        default: 'no'
+
+jobs:
+  create-indexes:
+    name: Create Indexes (manual)
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm == 'yes' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+      - name: Run create-indexes
+        working-directory: backend
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        run: npm run create-indexes

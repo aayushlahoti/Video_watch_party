@@ -183,3 +183,18 @@ Access the application at `http://localhost:8080`.
 2. **Text Chat & Reactions**: Add real-time chat and floating emoji reactions per room.
 3. **Video Queue / Playlist**: Allow hosts and moderators to queue multiple YouTube videos for continuous playback.
 4. **WebRTC Voice Chat**: Peer-to-peer audio channels so participants can talk while watching.
+
+---
+
+**Database Indexes & Deployment**
+
+- The project includes a one-shot script to create important MongoDB indexes: the `create-indexes` script lives in `backend/scripts/createIndexes.js` and is exposed via the npm script `npm run create-indexes`.
+- In production, avoid enabling `autoIndex` to prevent runtime index builds. Instead create indexes as part of your deployment pipeline or run them manually once.
+- A GitHub Actions workflow is included to run the index script manually from the Actions UI. To use it, add your production/staging `MONGODB_URI` as a repository secret named `MONGODB_URI`, open the **Run Create Indexes** workflow, and trigger it with the `confirm` input set to `yes`.
+
+Local command (after setting `MONGODB_URI` in your environment):
+```bash
+cd backend
+npm ci
+npm run create-indexes
+```
