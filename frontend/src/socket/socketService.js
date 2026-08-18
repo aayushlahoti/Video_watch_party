@@ -1,6 +1,20 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+export const normalizeSocketUrl = (value) => {
+  const raw = (value || '').trim().replace(/\/+$/, '');
+
+  if (!raw) return 'http://localhost:5000';
+  if (raw === 'http://localhost' || raw === 'http://localhost/') {
+    return 'http://localhost:5000';
+  }
+  if (raw === 'http://localhost/api') {
+    return 'http://localhost:5000';
+  }
+
+  return raw;
+};
+
+const SOCKET_URL = normalizeSocketUrl(import.meta.env?.VITE_SOCKET_URL);
 
 let socket = null;
 
