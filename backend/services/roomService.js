@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import Room from '../models/Room.js';
 import { createAppError } from '../utils/response.js';
@@ -15,6 +16,46 @@ const generateUniqueRoomCode = async () => {
     if (!exists) return code;
   }
   throw createAppError('Could not generate a unique room code. Please try again.', 500);
+};
+
+/**
+ * Normalize a room identifier so it works with either a Mongo ObjectId or a generated room code.
+ * @param {string} identifier
+ * @returns {{ _id?: string, roomCode?: string } | null}
+ */
+export const normalizeRoomIdentifier = (identifier) => {
+  const raw = String(identifier ?? '').trim();
+  if (!raw) return null;
+
+  if (mongoose.isValidObjectId(raw)) {
+    return { _id: raw };
+  }
+
+  const roomCode = raw.toUpperCase();
+  if (/^[A-Z0-9]{6,12}$/.test(roomCode)) {
+    return { roomCode };
+  }
+
+  return null;
+};
+
+const findRoomByIdentifier = async (identifier) => {
+  const normalized = normalizeRoomIdentifier(identifier);
+  if (!normalized) {
+    throw createAppError('Invalid room identifier.', 400);
+  }
+
+  const query = normalized._id ? { _id: normalized._id } : { roomCode: normalized.roomCode };
+  const room = await Room.findOne(query).populate([
+    { path: 'host', select: 'username email' },
+    { path: 'participants.userId', select: 'username email' },
+  ]);
+
+  if (!room) {
+    throw createAppError('Room not found.', 404);
+  }
+
+  return room;
 };
 
 /**
@@ -41,8 +82,7 @@ export const createRoom = async (hostId) => {
  * @returns {Promise<import('../models/Room.js').default>}
  */
 export const joinRoom = async (roomId, userId) => {
-  const room = await Room.findById(roomId);
-  if (!room) throw createAppError('Room not found.', 404);
+  const room = await findRoomByIdentifier(roomId);
 
   const alreadyJoined = room.participants.some(
     (p) => p.userId.toString() === userId.toString()
@@ -67,8 +107,7 @@ export const joinRoom = async (roomId, userId) => {
  * @returns {Promise<{ deleted: boolean, room: object | null }>}
  */
 export const leaveRoom = async (roomId, userId) => {
-  const room = await Room.findById(roomId);
-  if (!room) throw createAppError('Room not found.', 404);
+  const room = await findRoomByIdentifier(roomId);
 
   const participantIndex = room.participants.findIndex(
     (p) => p.userId.toString() === userId.toString()
@@ -100,13 +139,7 @@ export const leaveRoom = async (roomId, userId) => {
  * @returns {Promise<import('../models/Room.js').default>}
  */
 export const getRoomById = async (roomId) => {
-  const room = await Room.findById(roomId).populate([
-    { path: 'host', select: 'username email' },
-    { path: 'participants.userId', select: 'username email' },
-  ]);
-
-  if (!room) throw createAppError('Room not found.', 404);
-  return room;
+  return findRoomByIdentifier(roomId);
 };
 
 /**
@@ -118,8 +151,7 @@ export const getRoomById = async (roomId) => {
  * @returns {Promise<import('../models/Room.js').default>}
  */
 export const assignRole = async (roomId, requestingUserId, targetUserId, newRole) => {
-  const room = await Room.findById(roomId);
-  if (!room) throw createAppError('Room not found.', 404);
+  const room = await findRoomByIdentifier(roomId);
 
   if (room.host.toString() !== requestingUserId.toString()) {
     throw createAppError('Only the host can assign roles.', 403);
@@ -151,8 +183,7 @@ export const assignRole = async (roomId, requestingUserId, targetUserId, newRole
  * @returns {Promise<import('../models/Room.js').default>}
  */
 export const transferHost = async (roomId, currentHostId, newHostId) => {
-  const room = await Room.findById(roomId);
-  if (!room) throw createAppError('Room not found.', 404);
+  const room = await findRoomByIdentifier(roomId);
 
   if (room.host.toString() !== currentHostId.toString()) {
     throw createAppError('Only the current host can transfer host privileges.', 403);
@@ -189,8 +220,7 @@ export const transferHost = async (roomId, currentHostId, newHostId) => {
  * @returns {Promise<import('../models/Room.js').default>}
  */
 export const removeMember = async (roomId, requestingUserId, targetUserId) => {
-  const room = await Room.findById(roomId);
-  if (!room) throw createAppError('Room not found.', 404);
+  const room = await findRoomByIdentifier(roomId);
 
   const requester = room.participants.find(
     (p) => p.userId.toString() === requestingUserId.toString()

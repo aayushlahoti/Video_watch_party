@@ -1,20 +1,26 @@
 import { body, param } from 'express-validator';
+import { normalizeRoomIdentifier } from '../services/roomService.js';
+
+const roomIdentifierRule = param('id')
+  .trim()
+  .notEmpty()
+  .withMessage('Room identifier is required')
+  .custom((value) => {
+    if (!normalizeRoomIdentifier(value)) {
+      throw new Error('Invalid room identifier. Use a room code or a Mongo room ID.');
+    }
+    return true;
+  });
 
 export const createRoomValidator = [
   // No body required — room code is generated server-side
 ];
 
-export const joinRoomValidator = [
-  param('id').notEmpty().withMessage('Room ID is required').isMongoId().withMessage('Invalid room ID'),
-];
+export const joinRoomValidator = [roomIdentifierRule];
 
-export const leaveRoomValidator = [
-  param('id').notEmpty().withMessage('Room ID is required').isMongoId().withMessage('Invalid room ID'),
-];
+export const leaveRoomValidator = [roomIdentifierRule];
 
-export const getRoomValidator = [
-  param('id').notEmpty().withMessage('Room ID is required').isMongoId().withMessage('Invalid room ID'),
-];
+export const getRoomValidator = [roomIdentifierRule];
 
 export const assignRoleValidator = [
   param('id').isMongoId().withMessage('Invalid room ID'),
